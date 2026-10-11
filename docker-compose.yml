@@ -28,7 +28,10 @@ services:
     # 固定本地 tag，不用 latest：tag 稳定 + 下面 label 双重保险，
     # 避免宿主机上的 watchtower 把容器当"待更新"反复拉取重启
     image: english-word:local
-    container_name: ew-web
+    # 固定容器名：日志、docker stats、备份脚本里都要按名字定位，
+    # 交给 compose 自动生成（english-word-web-1）不好记也不好写脚本。
+    # 注意：改名后必须先 down 再 up，否则旧容器仍占着端口，新的起不来。
+    container_name: wordvein-web
     restart: unless-stopped
     labels:
       # watchtower 排除标记（镜像 LABEL 已带一份，这里再显式声明一次）
@@ -73,7 +76,9 @@ services:
       context: .
       dockerfile: Dockerfile
     image: english-word:local
-    container_name: ew-admin
+    # 与站点同一个镜像、不同容器：靠 ADMIN_MODE=1 只服务 /admin，
+    # 从而做到"管理端只在内网端口可达"。两个容器共享同一份镜像层，不额外占磁盘。
+    container_name: wordvein-admin
     restart: unless-stopped
     labels:
       com.centurylinklabs.watchtower.enable: 'false'
