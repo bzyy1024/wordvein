@@ -1,0 +1,92 @@
+# 英语词根词缀词典 — 编排文件（只跑 Web，数据库用外部实例）
+#
+# 用法：
+#   构建并启动：  docker compose up -d --build
+#   看日志：      docker compose logs -f
+#   停止：        docker compose down
+#   重启：        docker compose restart
+#
+# 两个服务共用同一个镜像：
+#   web   站点，端口 WEB_PORT（默认 3000）
+#   admin 管理端，端口 ADMIN_PORT（默认 8311），带 ADMIN_MODE=1，
+#         访问非 /admin 路径会被中间件重定向回管理端
+#
+# 数据库：不在本 compose 中部署，连接外部实例，连接串由 .env 的 DATABASE_URL 提供。
+#   建表 / 建扩展用宿主机脚本：pnpm db:init（等价于 01-init.sql + docs/schema.sql，幂等）
+#   导入数据：                 pnpm run import
+#
+# 镜像已带 LABEL com.centurylinklabs.watchtower.enable=false，web 服务也声明了同名
+# label：宿主机上的 watchtower 不会扫描 / 重建本容器。
+
+name: english-word
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # 固定本地 tag，不用 latest：tag 稳定 + 下面 label 双重保险，
+    # 避免宿主机上的 watchtower 把容器当"待更新"反复拉取重启
+    image: english-word:local
+    container_name: ew-web
+    restart: unless-stopped
+    labels:
+      # watchtower 排除标记（镜像 LABEL 已带一份，这里再显式声明一次）
+      com.centurylinklabs.watchtower.enable: 'false'
+    environment:
+      # 必填：用 :? 强制校验，忘记配时直接报错，不会带着空串启动
+      DATABASE_URL: ${DATABASE_URL:?请在 .env 中配置 DATABASE_URL}
+      # 外部库若把表建在自建 schema（如 wordvein），必须带上，否则会查到空库。
+      # 运行时会把它拼成 options=-csearch_path=<schema>,public
+      DB_SCHEMA: ${DB_SCHEMA:-public}
+      NODE_ENV: ${NODE_ENV:-production}
+      # 站点对外地址，用于 sitemap / canonical / robots。
+      # 运行时读取，换域名改这里重启即可，不用重建镜像
+      SITE_URL: ${SITE_URL:-http://localhost:3000}
+      # 容器内端口固定 3000；映射到宿主机的端口由 WEB_PORT 控制
+      PORT: '3000'
+      # ---- 用户账号：邮箱登录链接（第三期）----
+      # 签发会话 JWT 的密钥，必填。改它即全体下线
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?请在 .env 中配置 AUTH_JWT_SECRET}
+      # 会话有效期（天），缺省 7
+      AUTH_SESSION_DAYS: ${AUTH_SESSION_DAYS:-7}
+      # 邮件中登录链接的域名，缺省回退 SITE_URL
+      AUTH_URL: ${AUTH_URL:-${SITE_URL:-http://localhost:3000}}
+      # https 站点设为 1，给会话 Cookie 加 Secure
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-0}
+      # ---- 发信（SMTP）：未配置时无法发送登录邮件 ----
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    ports:
+      - '${WEB_PORT:-3000}:3000'
+
+  # ----------------------------
+  # 管理端（第二期）
+  # ----------------------------
+  # 与 web 共用镜像，靠 ADMIN_MODE=1 只服务 /admin 路由，
+  # 独立端口暴露，不占用站点端口，也便于只对内网开放。
+  admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: english-word:local
+    container_name: ew-admin
+    restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: 'false'
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?请在 .env 中配置 DATABASE_URL}
+      DB_SCHEMA: ${DB_SCHEMA:-public}
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: '3000'
+      # 只服务 /admin；未登录访问一律跳登录页
+      ADMIN_MODE: '1'
+      # 管理口令。未配置时管理端拒绝登录（安全默认值）
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?管理端需要设置 ADMIN_PASSWORD}
+      # 走 HTTPS 时设为 1，让会话 Cookie 带上 Secure
+      ADMIN_COOKIE_SECURE: ${ADMIN_COOKIE_SECURE:-0}
+    ports:
+      - '${ADMIN_PORT:-8311}:3000'

@@ -1,0 +1,220 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+  }
+}
+
+/* ============================================================
+   暗色主题
+   ------------------------------------------------------------
+   实现方式：html 上加 .dark 类，本文件把用到的浅色工具类
+   在 .dark 作用域下重映射为对应的深色档位。
+
+   为什么集中在这里而不是给每个组件加 dark: 变体：
+     组件里的颜色类有 180 多处、分布在 14 个文件，逐个加变体
+     既难写全也难维护。集中成一张"档位 -> 档位"映射表后，
+     现有页面零改动即可支持暗色，新写的浅色类也自动适配。
+
+   规则：
+     1. 背景按"层级"降亮：页面底最暗、卡片抬升一级、内嵌块与页面同底
+     2. 文字按"对比度"降档：slate-900 -> slate-100，依次往下错一档
+     3. 语义色（蓝 / 琥珀 / 玫红 / 词素三色）保留色相，只调明度
+     4. text-white 不改：它只出现在蓝色主按钮上，暗色下按钮仍是蓝底
+
+   这些规则写在 @layer 之外，因此优先级高于 Tailwind 的 utilities 层，
+   不依赖书写顺序，也不会被 purge 掉。
+   ============================================================ */
+
+/* body 的背景来自 @apply，DOM 上没有 bg-slate-50 类，单独覆盖 */
+.dark body {
+  background-color: #0f172a; /* slate-900 */
+  color: #f1f5f9; /* slate-100 */
+}
+
+body {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+}
+
+/* ---------- 中性：背景 ---------- */
+.dark .bg-white {
+  background-color: #1e293b; /* slate-800：卡片，比页面底抬升一级 */
+}
+.dark .bg-slate-50 {
+  background-color: #0f172a; /* slate-900：与页面底一致 */
+}
+.dark .bg-slate-100 {
+  background-color: #334155; /* slate-700 */
+}
+
+/* ---------- 中性：文字 ---------- */
+.dark .text-slate-900 {
+  color: #f1f5f9; /* slate-100 */
+}
+.dark .text-slate-800 {
+  color: #e2e8f0; /* slate-200 */
+}
+.dark .text-slate-700 {
+  color: #cbd5e1; /* slate-300 */
+}
+.dark .text-slate-600 {
+  color: #94a3b8; /* slate-400 */
+}
+.dark .text-slate-500 {
+  color: #94a3b8; /* slate-400 */
+}
+.dark .text-slate-400 {
+  color: #64748b; /* slate-500 */
+}
+.dark .text-slate-300 {
+  color: #475569; /* slate-600 */
+}
+.dark .hover\:text-slate-900:hover {
+  color: #f1f5f9; /* slate-100 */
+}
+.dark .hover\:text-slate-700:hover {
+  color: #cbd5e1; /* slate-300 */
+}
+
+/* ---------- 中性：边框与分割线 ---------- */
+.dark .border-slate-200 {
+  border-color: #334155; /* slate-700 */
+}
+.dark .border-slate-300 {
+  border-color: #475569; /* slate-600 */
+}
+.dark .border-slate-100 {
+  border-color: #334155; /* slate-700 */
+}
+.dark .hover\:border-slate-400:hover {
+  border-color: #475569; /* slate-600 */
+}
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #334155; /* slate-700 */
+}
+
+/* ---------- 主色：蓝 ---------- */
+.dark .bg-blue-50 {
+  background-color: #172554; /* blue-950 */
+}
+.dark .hover\:bg-blue-50\/40:hover {
+  background-color: rgb(30 58 138 / 0.4); /* blue-900 / 40% */
+}
+.dark .bg-blue-100 {
+  background-color: #1e3a8a; /* blue-900 */
+}
+.dark .hover\:bg-blue-100:hover {
+  background-color: #1e3a8a; /* blue-900 */
+}
+.dark .hover\:bg-blue-700:hover {
+  background-color: #1d4ed8; /* blue-700 */
+}
+.dark .text-blue-600 {
+  color: #60a5fa; /* blue-400 */
+}
+.dark .text-blue-700 {
+  color: #93c5fd; /* blue-300 */
+}
+.dark .text-blue-900 {
+  color: #dbeafe; /* blue-100 */
+}
+.dark .border-blue-200 {
+  border-color: #1e40af; /* blue-800 */
+}
+.dark .border-blue-300 {
+  border-color: #1d4ed8; /* blue-700 */
+}
+.dark .hover\:border-blue-200:hover {
+  border-color: #1e40af; /* blue-800 */
+}
+.dark .hover\:border-blue-300:hover {
+  border-color: #2563eb; /* blue-600 */
+}
+.dark .focus\:border-blue-500:focus {
+  border-color: #60a5fa; /* blue-400 */
+}
+.dark .focus\:ring-blue-100:focus {
+  --tw-ring-color: #1e3a8a; /* blue-900 */
+}
+
+/* ---------- 提示：琥珀 ---------- */
+.dark .bg-amber-50 {
+  background-color: #451a03; /* amber-950 */
+}
+.dark .bg-amber-100 {
+  background-color: #78350f; /* amber-900 */
+}
+.dark .text-amber-700 {
+  color: #fcd34d; /* amber-300 */
+}
+.dark .text-amber-900 {
+  color: #fde68a; /* amber-200 */
+}
+.dark .border-amber-200 {
+  border-color: #78350f; /* amber-900 */
+}
+
+/* ---------- 警示：玫红 ---------- */
+.dark .bg-rose-50 {
+  background-color: #4c0519; /* rose-950 */
+}
+.dark .text-rose-900 {
+  color: #fecdd3; /* rose-200 */
+}
+.dark .border-rose-200 {
+  border-color: #881337; /* rose-900 */
+}
+
+/* ---------- 词素三色：前缀 / 词根 / 后缀 ---------- */
+.dark .text-prefix {
+  color: #60a5fa; /* blue-400 */
+}
+.dark .border-prefix-border {
+  border-color: #1e40af; /* blue-800 */
+}
+.dark .bg-prefix-soft {
+  background-color: #172554; /* blue-950 */
+}
+
+.dark .text-root {
+  color: #a78bfa; /* violet-400 */
+}
+.dark .border-root-border {
+  border-color: #4c1d95; /* violet-900 */
+}
+.dark .bg-root-soft {
+  background-color: #2e1065; /* violet-950 */
+}
+
+/* ---------- 补充：首页大搜索框的交互态 ---------- */
+/* 清空按钮的悬停底色，与 .dark .bg-slate-100 同档 */
+.dark .hover\:bg-slate-100:hover {
+  background-color: #334155; /* slate-700 */
+}
+/* placeholder 在暗色下压暗一档，避免比正文还抢眼 */
+.dark .placeholder\:text-slate-400 {
+  color: #64748b; /* slate-500 */
+}
+
+.dark .text-suffix {
+  color: #34d399; /* emerald-400 */
+}
+.dark .border-suffix-border {
+  border-color: #065f46; /* emerald-900 */
+}
+.dark .bg-suffix-soft {
+  background-color: #022c22; /* emerald-950 */
+}

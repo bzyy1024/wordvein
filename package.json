@@ -1,0 +1,51 @@
+{
+  "name": "english-word",
+  "version": "0.1.0",
+  "private": true,
+  "description": "英语词根词缀拆解查询站",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:check": "node scripts/check-schema-sync.mjs",
+    "db:init": "node scripts/db-init.mjs",
+    "db:probe": "node scripts/db-probe.mjs",
+    "data:check": "node scripts/check-wordroot.mjs",
+    "data:stats": "node scripts/stats-ecdict.mjs",
+    "data:morphemes": "node scripts/build-morphemes.mjs",
+    "data:words": "node scripts/build-words.mjs",
+    "data:cn": "node scripts/apply-morpheme-cn.mjs",
+    "db:gloss": "node scripts/build-gloss.mjs",
+    "import": "node scripts/import.mjs"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.38.0",
+    "jose": "^6.2.12",
+    "next": "^15.1.0",
+    "nodemailer": "^10.1.0",
+    "pg": "^8.13.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.11.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "dotenv": "^16.4.0",
+    "drizzle-kit": "^0.30.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

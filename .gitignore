@@ -1,0 +1,39 @@
+# ---- 依赖 ----
+node_modules/
+.pnpm-store/
+
+# ---- 构建产物 ----
+.next/
+out/
+dist/
+build/
+
+# ---- TypeScript 增量编译缓存（tsc --noEmit 也会产出）----
+*.tsbuildinfo
+
+# ---- 环境变量（含数据库口令，切勿提交）----
+.env
+.env.local
+.env.*.local
+
+# ---- 原始数据（约 120MB，应按需下载而非入库）----
+data/raw/
+
+# ---- 生成的中间数据（可重跑生成）----
+data/*.jsonl
+data/*.md
+
+# ---- 探活 / 建表的临时输出（含数据库版本、账号、主机等环境信息）----
+data/_*.txt
+
+# ---- 日志 / 缓存 ----
+*.log
+npm-debug.log*
+yarn-debug.log*
+.DS_Store
+Thumbs.db
+
+# ---- 编辑器 ----
+.vscode/*
+!.vscode/extensions.json
+.idea/

@@ -1,0 +1,30 @@
+# 依赖与构建产物：由镜像内重新安装 / 生成
+node_modules
+.next
+out
+*.tsbuildinfo
+
+# 版本控制
+.git
+.gitignore
+.github
+
+# 凭据：运行时由 environment 注入，禁止打进镜像
+.env
+.env.*
+!.env.example
+
+# 原始数据：体积大，仅构建期不需要
+data/raw
+
+# 日志与临时文件
+*.log
+data/_*
+
+# 文档与编辑器配置（生产镜像无需）
+docs
+*.md
+!README.md
+.vscode
+.idea
+.DS_Store
