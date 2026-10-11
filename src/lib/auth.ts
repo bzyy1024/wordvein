@@ -26,6 +26,15 @@ const MAX_SESSION_DAYS = 90;
 /** 邮箱登录链接的有效期（分钟） */
 export const LOGIN_TOKEN_MINUTES = 30;
 
+/**
+ * 已使用链接的重放窗口（分钟）
+ *
+ * QQ / 企业邮箱等会在投递时预取邮件里的链接做安全检测，一次性链接会被扫描器
+ * 提前消耗，用户真正点击时反而拿到"已失效"。因此消费后的一小段时间内放行再次
+ * 兑换：预取过之后用户仍能登录，代价是拿到链接的人在窗口内可重复登录。
+ */
+export const LOGIN_TOKEN_REPLAY_MINUTES = 15;
+
 export type SessionUser = {
   id: string;
   email: string;
@@ -40,7 +49,20 @@ export type SessionUser = {
  */
 export function getAuthBaseUrl(): string {
   const raw = (process.env.AUTH_URL ?? '').trim() || (process.env.SITE_URL ?? '').trim() || SITE_URL;
-  return raw.replace(/\/+$/, '');
+  const trimmed = raw.replace(/\/+$/, '');
+
+  // 0.0.0.0 是"监听所有网卡"的写法，不是可用地址：发到邮件里指向的是收件人
+  // 自己的机器，浏览器也可能直接拒开。兜底换成 localhost 并留一条告警，
+  // 免得链接点开是白屏却查不出原因。
+  if (/^https?:\/\/0\.0\.0\.0(?=[:/]|$)/i.test(trimmed)) {
+    const fixed = trimmed.replace('0.0.0.0', 'localhost');
+    console.warn(
+      `[auth] AUTH_URL / SITE_URL 配成了 ${trimmed}，0.0.0.0 不能出现在邮件链接里，已改用 ${fixed}`,
+    );
+    return fixed;
+  }
+
+  return trimmed;
 }
 
 /** 会话有效期（天），非法值一律回退默认 7 天 */

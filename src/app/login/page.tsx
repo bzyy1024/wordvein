@@ -21,7 +21,8 @@ export const metadata: Metadata = {
 };
 
 const ERROR_TEXT: Record<string, string> = {
-  invalid: '链接已失效或已被使用过，请重新发送一封',
+  used: '这个链接已经登录过了，请重新发送一封新链接',
+  invalid: '链接已失效或已过期，请重新发送一封',
   failed: '登录失败，请重新发送一封邮件再试',
 };
 

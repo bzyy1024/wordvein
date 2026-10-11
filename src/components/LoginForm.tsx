@@ -64,7 +64,9 @@ export default function LoginForm({ next, mailConfigured }: Props) {
             我们给 <span className="font-medium">{sent.to}</span> 发了一封登录邮件
             {sent.minutes ? `，链接 ${sent.minutes} 分钟内有效` : ''}。
           </p>
-          <p className="mt-1">点开邮件里的链接即可完成登录，链接只能使用一次。</p>
+          <p className="mt-1">
+            点开邮件里的链接即可完成登录；有效期内重复点开同样有效。
+          </p>
         </div>
 
         {sent.devLink && (

@@ -11,7 +11,7 @@
 
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { query } from '@/db';
-import { LOGIN_TOKEN_MINUTES } from '@/lib/auth';
+import { LOGIN_TOKEN_MINUTES, LOGIN_TOKEN_REPLAY_MINUTES } from '@/lib/auth';
 
 /** 够用即可：不追求 RFC 5322 全量，只挡明显乱填 */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -105,27 +105,60 @@ export async function createLoginToken(email: string, nextPath: string): Promise
   return token;
 }
 
+export type LoginTokenResult =
+  | { ok: true; email: string; nextPath: string }
+  | { ok: false; reason: 'used' | 'invalid' };
+
 /**
- * 消费 token：一次性 + 限时
+ * 消费 token：限时 + 一次性，但对"重复点击 / 被邮件安全扫描器预取"网开一面
  *
- * 用 UPDATE ... RETURNING 做原子占位，并发点两次也只有一次能拿到结果。
+ * 正常路径用 UPDATE ... RETURNING 做原子占位，并发点两次只有一次能占到。
+ * 已被消费且还在重放窗口内的，按同一条链接再放行一次，避免出现
+ * "链接被邮箱预取消耗 -> 用户点击看到已失效"这种最影响体验的情况。
  */
-export async function consumeLoginToken(
-  token: string,
-): Promise<{ email: string; nextPath: string } | null> {
-  const r = await query<{ email: string; next_path: string | null }>(
+export async function consumeLoginToken(token: string): Promise<LoginTokenResult> {
+  const hash = hashToken(token);
+
+  const first = await query<{ email: string; next_path: string | null }>(
     `UPDATE login_tokens
         SET consumed_at = now()
       WHERE token_hash = $1
         AND consumed_at IS NULL
         AND expires_at > now()
       RETURNING email, next_path`,
-    [hashToken(token)],
+    [hash],
   );
 
-  const row = r.rows[0];
-  if (!row) return null;
-  return { email: row.email, nextPath: row.next_path ?? '/account' };
+  const consumed = first.rows[0];
+  if (consumed) {
+    return { ok: true, email: consumed.email, nextPath: consumed.next_path ?? '/account' };
+  }
+
+  // 没占到：区分"不存在 / 已过期"与"已被使用过（是否还在重放窗口内）"
+  const { rows } = await query<{
+    email: string;
+    next_path: string | null;
+    expired: boolean;
+    replayed: boolean;
+  }>(
+    `SELECT email,
+            next_path,
+            (expires_at <= now()) AS expired,
+            (consumed_at IS NOT NULL
+             AND expires_at > now()
+             AND consumed_at > now() - ($2 || ' minutes')::interval) AS replayed
+       FROM login_tokens
+      WHERE token_hash = $1
+      LIMIT 1`,
+    [hash, String(LOGIN_TOKEN_REPLAY_MINUTES)],
+  );
+
+  const found = rows[0];
+  if (!found) return { ok: false, reason: 'invalid' };
+  if (found.replayed) {
+    return { ok: true, email: found.email, nextPath: found.next_path ?? '/account' };
+  }
+  return { ok: false, reason: found.expired ? 'invalid' : 'used' };
 }
 
 /**

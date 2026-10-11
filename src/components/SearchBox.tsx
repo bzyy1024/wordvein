@@ -3,7 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-type SuggestItem = { word: string; phonetic: string | null };
+type SuggestItem = { word: string; phonetic: string | null; definitionCn?: string | null };
+
+/** 下拉里的中文释义最长显示字符数，超出截断避免撑破面板 */
+const CN_MAX = 16;
+
+function clip(s: string, max = CN_MAX): string {
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
 
 /**
  * 搜索框（F1）
@@ -20,7 +27,7 @@ type SuggestItem = { word: string; phonetic: string | null };
 export default function SearchBox({
   autoFocus = false,
   size = 'sm',
-  placeholder = '查单词，或直接搜词根如 dict、spect',
+  placeholder = '查单词、词根 dict，或中文「预测」',
 }: {
   autoFocus?: boolean;
   size?: 'sm' | 'lg';
@@ -189,6 +196,13 @@ export default function SearchBox({
                 {it.phonetic && (
                   <span className={isLg ? 'text-sm text-slate-400' : 'text-xs text-slate-400'}>
                     {it.phonetic}
+                  </span>
+                )}
+                {it.definitionCn && (
+                  <span
+                    className={`truncate ${isLg ? 'text-sm text-slate-500' : 'text-xs text-slate-500'}`}
+                  >
+                    {clip(it.definitionCn)}
                   </span>
                 )}
               </button>

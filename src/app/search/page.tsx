@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { searchAll } from '@/lib/queries';
+import { hasCJK, searchAll } from '@/lib/queries';
 import { safe } from '@/lib/safe';
 import { cleanForm } from '@/lib/labels';
 import SearchBox from '@/components/SearchBox';
@@ -9,7 +9,7 @@ import SearchBox from '@/components/SearchBox';
  * 搜索结果页（F1，SSR）
  *
  * 单词区与词素区分栏展示：
- *   - 单词：精确 > 前缀 > trigram 拼写容错（predct → predict）
+ *   - 单词：含汉字时按中文释义反查（「预测」→ predict），否则精确 > 前缀 > trigram 拼写容错（predct → predict）
  *   - 词素：形式匹配 + 中文含义反查（搜「说」能发现 dict）
  */
 
@@ -45,7 +45,9 @@ export default async function SearchPage({ searchParams }: Props) {
       </header>
 
       {!term ? (
-        <p className="text-sm text-slate-600">输入单词或词根开始搜索。</p>
+        <p className="text-sm text-slate-600">
+          输入单词、词根或中文含义开始搜索，例如 predict、dict、预测。
+        </p>
       ) : (
         <>
           {/* 单词区 */}
@@ -58,7 +60,14 @@ export default async function SearchPage({ searchParams }: Props) {
             </h2>
 
             {results.words.length === 0 ? (
-              <p className="text-sm text-slate-600">没有匹配的单词。</p>
+              <>
+                <p className="text-sm text-slate-600">没有匹配的单词。</p>
+                <p className="mt-1.5 text-xs text-slate-500">
+                  {hasCJK(term)
+                    ? '中文按义项释义子串匹配，可以换个更短的说法试试，例如「减少」。'
+                    : '可以检查拼写，或试试按中文含义搜索，例如「预测」。'}
+                </p>
+              </>
             ) : (
               <ul className="space-y-2">
                 {results.words.map((w) => (
@@ -73,6 +82,16 @@ export default async function SearchPage({ searchParams }: Props) {
                       {w.phonetic && (
                         <span className="text-sm text-slate-500">
                           {w.phonetic}
+                        </span>
+                      )}
+                      {w.matchedCn && (
+                        <span className="max-w-full truncate text-sm text-slate-600">
+                          {w.matchedPos && (
+                            <span className="mr-1 text-xs text-slate-400">
+                              {w.matchedPos}
+                            </span>
+                          )}
+                          {w.matchedCn}
                         </span>
                       )}
                       {w.freqRank != null && (

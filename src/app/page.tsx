@@ -64,13 +64,13 @@ export default async function HomePage() {
           <SearchBox
             size="lg"
             autoFocus
-            placeholder="输入单词，如 predict；或词根 dict、spect"
+            placeholder="输入单词 predict、词根 dict，或中文「预测」"
           />
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
           <span className="text-slate-500">试试：</span>
-          {['predict', 'transport', 'invisible', 'respect'].map((w) => (
+          {['predict', 'transport', 'invisible', 'respect', '预测'].map((w) => (
             <Link
               key={w}
               href={`/search?q=${encodeURIComponent(w)}`}

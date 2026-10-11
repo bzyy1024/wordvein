@@ -113,6 +113,8 @@ function toMorphemeListItem(r: {
 export type SuggestItem = {
   word: string;
   phonetic: string | null;
+  /** 中文反查时命中的义项释义；英文检索为 null */
+  definitionCn?: string | null;
 };
 
 export type SiteStats = {
@@ -241,76 +243,199 @@ export async function getFeaturedWords(limit = 8) {
 // 搜索（F1）
 // ----------------------------
 
+export type SearchWordItem = {
+  id: number;
+  word: string;
+  phonetic: string | null;
+  freqRank: number | null;
+  sim: number;
+  /** 中文反查时命中的义项释义；英文检索为 null */
+  matchedCn: string | null;
+  /** 命中义项的词性 */
+  matchedPos: string | null;
+};
+
 export type SearchResults = {
-  words: { id: number; word: string; phonetic: string | null; freqRank: number | null; sim: number }[];
+  words: SearchWordItem[];
   morphemes: MorphemeListItem[];
 };
 
 /**
- * 混合搜索：单词（精确 > 前缀 > 拼写容错）+ 词素（形式 / 中文含义反查）
+ * 是否含汉字（含扩展区与兼容区）。
+ * 用于分流：含汉字走「中文释义反查单词」，否则走英文拼写检索。
+ * 中文无法参与 pg_trgm 的英文拼写容错，混在一起只会拖慢且无结果。
  */
-export async function searchAll(q: string, limit = 20): Promise<SearchResults> {
-  const term = q.trim();
-  if (!term) return { words: [], morphemes: [] };
+const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
 
-  const [wordRes, morphRes] = await Promise.all([
-    query<{
-      id: number;
-      word: string;
-      phonetic: string | null;
-      freq_rank: number | null;
-      sim: number;
-    }>(
-      `SELECT id::int, word, phonetic, freq_rank,
-              similarity(word, $1) AS sim
-         FROM words
-        WHERE word % $1
-           OR lower(word) LIKE lower($1) || '%'
-        ORDER BY (lower(word) = lower($1)) DESC,
-                 sim DESC,
-                 freq_rank NULLS LAST,
-                 word
-        LIMIT $2`,
-      [term, limit],
-    ),
-    query<{
-      id: number;
-      form: string;
-      slug: string;
-      type: string;
-      meaning_cn: string | null;
-      origin_lang: string | null;
-      word_count: number;
-    }>(
-      `SELECT id::int, form, slug, type, meaning_cn, origin_lang, word_count
-         FROM morphemes
-        WHERE lower(form) LIKE '%' || lower($1) || '%'
-           OR (meaning_cn IS NOT NULL AND meaning_cn ILIKE '%' || $1 || '%')
-           OR (length($1) >= 3 AND form % $1)
-        ORDER BY (lower(form) = lower($1)) DESC,
-                 word_count DESC,
-                 form
-        LIMIT $2`,
-      [term, limit],
-    ),
-  ]);
+export function hasCJK(s: string): boolean {
+  return CJK_RE.test(s);
+}
 
-  return {
-    words: wordRes.rows.map((r) => ({
+/**
+ * 释义里「恰好等于查询词」的判定。
+ *
+ * definition_cn 形如 '减少, 减轻, 减弱'，用逗号分隔多个译法。
+ * 子串匹配会把「减轻」也带出来，排序上要把独立成项的译法排前面。
+ */
+const EXACT_SENSE_SQL = `(
+    s.definition_cn = $1
+    OR s.definition_cn LIKE $1 || ',%'
+    OR s.definition_cn LIKE '%,' || $1 || '%'
+  )`;
+
+/** 英文检索：精确 > 前缀 > trigram 拼写容错（predct → predict） */
+async function searchWordsByForm(term: string, limit: number): Promise<SearchWordItem[]> {
+  const { rows } = await query<{
+    id: number;
+    word: string;
+    phonetic: string | null;
+    freq_rank: number | null;
+    sim: number;
+  }>(
+    `SELECT id::int, word, phonetic, freq_rank,
+            similarity(word, $1) AS sim
+       FROM words
+      WHERE word % $1
+         OR lower(word) LIKE lower($1) || '%'
+      ORDER BY (lower(word) = lower($1)) DESC,
+               sim DESC,
+               freq_rank NULLS LAST,
+               word
+      LIMIT $2`,
+    [term, limit],
+  );
+
+  return rows.map((r) => ({
     id: r.id,
     word: r.word,
     phonetic: r.phonetic,
     freqRank: r.freq_rank,
     sim: Number(r.sim),
-  })),
-    morphemes: morphRes.rows.map(toMorphemeListItem),
-  };
+    matchedCn: null,
+    matchedPos: null,
+  }));
 }
 
-/** 搜索建议，下拉补全用 */
+/**
+ * 中文反查单词：按义项的中文释义匹配，例如「预测」→ predict / forecast。
+ *
+ * 一个词有多个义项，用 DISTINCT ON (w.id) 每个词只保留最相关的那一条，
+ * 否则同词会重复出现占满结果位。
+ */
+async function searchWordsByCn(term: string, limit: number): Promise<SearchWordItem[]> {
+  const { rows } = await query<{
+    id: number;
+    word: string;
+    phonetic: string | null;
+    freq_rank: number | null;
+    matched_cn: string;
+    matched_pos: string | null;
+  }>(
+    `SELECT * FROM (
+        SELECT DISTINCT ON (w.id)
+               w.id::int   AS id,
+               w.word,
+               w.phonetic,
+               w.freq_rank,
+               s.definition_cn AS matched_cn,
+               s.pos           AS matched_pos,
+               ${EXACT_SENSE_SQL} AS exact
+          FROM senses s
+          JOIN words w ON w.id = s.word_id
+         WHERE s.definition_cn ILIKE '%' || $1 || '%'
+         ORDER BY w.id, exact DESC, s.sort_no
+       ) t
+       ORDER BY t.exact DESC, t.freq_rank NULLS LAST, t.word
+       LIMIT $2`,
+    [term, limit],
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    word: r.word,
+    phonetic: r.phonetic,
+    freqRank: r.freq_rank,
+    sim: 1,
+    matchedCn: r.matched_cn,
+    matchedPos: r.matched_pos,
+  }));
+}
+
+/**
+ * 混合搜索：
+ *   - 含汉字 → 中文释义反查单词
+ *   - 否则   → 单词（精确 > 前缀 > 拼写容错）
+ * 词素区两条路都走（形式匹配 + 中文含义反查）
+ */
+export async function searchAll(q: string, limit = 20): Promise<SearchResults> {
+  const term = q.trim();
+  if (!term) return { words: [], morphemes: [] };
+
+  const [words, morphemes] = await Promise.all([
+    hasCJK(term) ? searchWordsByCn(term, limit) : searchWordsByForm(term, limit),
+    listMorphemesByTerm(term, limit),
+  ]);
+
+  return { words, morphemes };
+}
+
+/** 词素检索：形式匹配 + 中文含义反查（搜「说」能发现 dict） */
+async function listMorphemesByTerm(term: string, limit: number): Promise<MorphemeListItem[]> {
+  // 词素形式都是拉丁字母，中文输入走 trigram 只会白扫一遍
+  const fuzzy = hasCJK(term) ? 'FALSE' : '(length($1) >= 3 AND form % $1)';
+
+  const { rows } = await query<{
+    id: number;
+    form: string;
+    slug: string;
+    type: string;
+    meaning_cn: string | null;
+    origin_lang: string | null;
+    word_count: number;
+  }>(
+    `SELECT id::int, form, slug, type, meaning_cn, origin_lang, word_count
+       FROM morphemes
+      WHERE lower(form) LIKE '%' || lower($1) || '%'
+         OR (meaning_cn IS NOT NULL AND meaning_cn ILIKE '%' || $1 || '%')
+         OR ${fuzzy}
+      ORDER BY (lower(form) = lower($1)) DESC,
+               word_count DESC,
+               form
+      LIMIT $2`,
+    [term, limit],
+  );
+
+  return rows.map(toMorphemeListItem);
+}
+
+/** 搜索建议，下拉补全用。中文输入时按义项释义反查单词 */
 export async function suggest(q: string, limit = 10): Promise<SuggestItem[]> {
   const term = q.trim();
   if (!term) return [];
+
+  if (hasCJK(term)) {
+    const { rows } = await query<{
+      word: string;
+      phonetic: string | null;
+      definition_cn: string;
+    }>(
+      `SELECT t.word, t.phonetic, t.matched_cn AS definition_cn
+         FROM (
+           SELECT DISTINCT ON (w.id)
+                  w.id, w.word, w.phonetic, w.freq_rank,
+                  s.definition_cn AS matched_cn,
+                  ${EXACT_SENSE_SQL} AS exact
+             FROM senses s
+             JOIN words w ON w.id = s.word_id
+            WHERE s.definition_cn ILIKE '%' || $1 || '%'
+            ORDER BY w.id, exact DESC, s.sort_no
+         ) t
+        ORDER BY t.exact DESC, t.freq_rank NULLS LAST, t.word
+        LIMIT $2`,
+      [term, limit],
+    );
+    return rows;
+  }
 
   const { rows } = await query<{ word: string; phonetic: string | null }>(
     `SELECT word, phonetic
