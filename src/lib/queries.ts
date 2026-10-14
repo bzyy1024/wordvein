@@ -226,7 +226,7 @@ export async function getRandomWord(exclude?: string): Promise<WordDetail | null
     `SELECT w.word
        FROM words w
       WHERE EXISTS (SELECT 1 FROM word_morphemes wm WHERE wm.word_id = w.id)
-        ${exclude ? `AND lower(w.word) <> lower($2)` : ''}
+        ${exclude ? `AND lower(w.word) <> lower($1)` : ''}
       ORDER BY random()
       LIMIT 1`,
     exclude ? [exclude] : [],
