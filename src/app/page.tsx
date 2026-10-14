@@ -1,10 +1,9 @@
 import Link from 'next/link';
-import { getStats, getFeaturedWords, getWord, listMorphemes, listOrigins } from '@/lib/queries';
+import { getStats, getRandomWord, listMorphemes, listOrigins } from '@/lib/queries';
 import { safe } from '@/lib/safe';
 import MorphemeCard from '@/components/MorphemeCard';
 import SearchBox from '@/components/SearchBox';
-import WordBreakdown from '@/components/WordBreakdown';
-import SenseList from '@/components/SenseList';
+import TodayWord from '@/components/TodayWord';
 import { SITE_DESCRIPTION } from '@/lib/site';
 import { ORIGIN_LABEL } from '@/lib/labels';
 
@@ -37,16 +36,14 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 export default async function HomePage() {
-  const [stats, featured, topMorphemes, origins] = await Promise.all([
+  const [stats, topMorphemes, origins] = await Promise.all([
     safe(getStats(), EMPTY_STATS),
-    safe(getFeaturedWords(8), []),
     safe(listMorphemes({}, 12), []),
     safe(listOrigins(), []),
   ]);
 
-  // 今日一词：取第一个已拆解的高频词，展示完整构词逻辑
-  const today =
-    featured.length > 0 ? await safe(getWord(featured[0].word), null) : null;
+  // 每日一词：随机取一个已拆解单词，展示完整构词逻辑
+  const today = await safe(getRandomWord(), null);
 
   return (
     <div className="space-y-12">
@@ -90,43 +87,8 @@ export default async function HomePage() {
         <Stat label="拆解关系" value={stats.breakdownCount} />
       </section>
 
-      {/* 今日一词 */}
-      {today && (
-        <section>
-          <div className="mb-4 flex items-baseline justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">今日一词</h2>
-            <Link
-              href={`/word/${encodeURIComponent(today.word)}`}
-              className="text-sm text-blue-600 hover:underline"
-            >
-              查看详情 →
-            </Link>
-          </div>
-
-          <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <div className="flex flex-wrap items-baseline gap-3">
-                <h3 className="text-2xl font-bold text-slate-900">
-                  {today.word}
-                </h3>
-                {today.phonetic && (
-                  <span className="text-sm text-slate-500">
-                    {today.phonetic}
-                  </span>
-                )}
-                {today.cefr && (
-                  <span className="rounded border border-slate-200 px-1.5 py-0.5 text-xs text-slate-500">
-                    {today.cefr}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <WordBreakdown items={today.breakdown} gloss={today.gloss} />
-            <SenseList senses={today.senses} />
-          </div>
-        </section>
-      )}
+      {/* 每日一词 */}
+      <TodayWord initial={today} />
 
       {/* 热门词素 */}
       {topMorphemes.length > 0 && (

@@ -220,6 +220,21 @@ export async function getWord(word: string): Promise<WordDetail | null> {
   };
 }
 
+/** 取一个随机的、已拆解的单词，用于首页「每日一词」随机展示 */
+export async function getRandomWord(exclude?: string): Promise<WordDetail | null> {
+  const { rows } = await query<{ word: string }>(
+    `SELECT w.word
+       FROM words w
+      WHERE EXISTS (SELECT 1 FROM word_morphemes wm WHERE wm.word_id = w.id)
+        ${exclude ? `AND lower(w.word) <> lower($2)` : ''}
+      ORDER BY random()
+      LIMIT 1`,
+    exclude ? [exclude] : [],
+  );
+  if (rows.length === 0) return null;
+  return getWord(rows[0].word);
+}
+
 /** 取若干高频且已拆解的单词，用于首页推荐 */
 export async function getFeaturedWords(limit = 8) {
   const { rows } = await query<{
